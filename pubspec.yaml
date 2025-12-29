@@ -1,0 +1,30 @@
+name: tuition_fee
+description: Tuition fee management app
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  provider: ^6.1.2
+  google_fonts: ^6.2.1
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  uuid: ^4.4.0
+  intl: ^0.19.0
+  collection: ^1.17.0
+
+  firebase_core: ^3.6.0
+  cloud_firestore: ^5.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
