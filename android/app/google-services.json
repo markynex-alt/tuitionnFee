@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1222743060",
+    "project_id": "tuitionfee-67718",
+    "storage_bucket": "tuitionfee-67718.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1222743060:android:5a64b99d694efc0bb70301",
+        "android_client_info": {
+          "package_name": "com.example.tuitionfee.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1222743060-292lpfs5ktq5tgfhupfveu62lt7rv5kh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDINq1wLl4suonKOChgov843tywF5TfzUg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1222743060-292lpfs5ktq5tgfhupfveu62lt7rv5kh.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

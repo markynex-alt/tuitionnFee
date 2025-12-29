@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../providers/app_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -10,52 +9,51 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  late TextEditingController prefixCtrl;
-  late TextEditingController lengthCtrl;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  bool isLoading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    final p = context.read<AppProvider>();
-    prefixCtrl = TextEditingController(text: p.studentIdPrefix);
-    lengthCtrl = TextEditingController(text: p.studentIdLength.toString());
+  Future<void> _loginWithGoogle() async {
+    setState(() => isLoading = true);
+    try {
+      final userCredential = await _auth.signInWithProvider(GoogleAuthProvider());
+      print("Google login success: ${userCredential.user?.email}");
+    } catch (e) {
+      print("Google login error: $e");
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _logout() async {
+    await _auth.signOut();
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    final p = context.watch<AppProvider>();
+    final user = _auth.currentUser;
 
     return Scaffold(
       appBar: AppBar(title: const Text("Settings")),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+      body: Center(
+        child: isLoading
+            ? const CircularProgressIndicator()
+            : Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            TextField(
-                controller: prefixCtrl,
-                decoration:
-                    const InputDecoration(labelText: "Student ID Prefix")),
-            TextField(
-                controller: lengthCtrl,
-                decoration:
-                    const InputDecoration(labelText: "Student ID Length (5-6)"),
-                keyboardType: TextInputType.number),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                final len = int.tryParse(lengthCtrl.text);
-                if (len == null || (len != 5 && len != 6)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Length must be 5 or 6")));
-                  return;
-                }
-                p.setStudentIdConfig(
-                    prefix: prefixCtrl.text.trim(), length: len);
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Settings saved")));
-              },
-              child: const Text("Save"),
-            ),
+            if (user == null)
+              ElevatedButton(
+                onPressed: _loginWithGoogle,
+                child: const Text("Login with Google"),
+              )
+            else ...[
+              Text(user.email ?? ""),
+              const SizedBox(height: 10),
+              OutlinedButton(
+                onPressed: _logout,
+                child: const Text("Logout"),
+              ),
+            ]
           ],
         ),
       ),

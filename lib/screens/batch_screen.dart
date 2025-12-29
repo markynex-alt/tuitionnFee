@@ -228,8 +228,6 @@ class BatchScreen extends StatelessWidget {
     );
   }
 
-
-
   // ---------- VIEW STUDENTS UNDER BATCH ----------
   void _openBatchStudents(BuildContext context, String batchId, String name) {
     showModalBottomSheet(

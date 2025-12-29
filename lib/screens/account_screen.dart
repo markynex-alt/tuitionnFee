@@ -36,55 +36,67 @@ class _AccountScreenState extends State<AccountScreen> {
     TextEditingController(text: student.monthlyFee.toString());
 
     final payments = p.paymentHistory(student.id);
-    int selectedMonth = DateTime.now().month;
 
+    // ✅ Prepare assigned months as DateTime objects
     final assignedMonths = payments
-        .map((e) => DateTime.parse(e['date']).month)
-        .toSet()
+        .map((e) => DateTime.parse(e['date']))
         .toList()
-      ..sort();
+      ..sort((a, b) => a.compareTo(b));
+
+    if (assignedMonths.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No months assigned yet")),
+      );
+      return;
+    }
+
+    DateTime selectedMonth = assignedMonths.first;
 
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Collect Fee"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountCtrl,
-              enabled: false,
-              decoration: const InputDecoration(labelText: "Amount"),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<int>(
-              value: assignedMonths.isNotEmpty ? assignedMonths.first : null,
-              decoration: const InputDecoration(labelText: "Select Month"),
-              items: assignedMonths.map((month) {
-                final record = payments.firstWhere((e) {
-                  final d = DateTime.parse(e['date']);
-                  return d.month == month;
-                });
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: amountCtrl,
+                enabled: false,
+                decoration: const InputDecoration(labelText: "Amount"),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<DateTime>(
+                value: selectedMonth,
+                decoration: const InputDecoration(labelText: "Select Month"),
+                items: assignedMonths.map((d) {
+                  final record = payments.firstWhere(
+                        (pmt) =>
+                    DateTime.parse(pmt['date']).month == d.month &&
+                        DateTime.parse(pmt['date']).year == d.year,
+                  );
+                  final isPaid = record['status'] == 'paid';
+                  final monthYear =
+                      "${DateFormat.MMM().format(d)}${d.year.toString().substring(2)}";
 
-                final isPaid = record['status'] == 'paid';
-                final monthName =
-                DateFormat.MMM().format(DateTime(0, month));
-
-                return DropdownMenuItem(
-                  value: month,
-                  enabled: !isPaid,
-                  child: Text(
-                    "$monthName${isPaid ? ' (Paid)' : ''}",
-                    style: TextStyle(
-                        color: isPaid ? Colors.grey : Colors.black),
-                  ),
-                );
-              }).toList(),
-              onChanged: (v) {
-                if (v != null) selectedMonth = v;
-              },
-            ),
-          ],
+                  return DropdownMenuItem<DateTime>(
+                    value: d,
+                    enabled: !isPaid,
+                    child: Text(
+                      monthYear,
+                        style: TextStyle(
+                          color: isPaid ? Colors.green.shade700 : Colors.red.shade200,
+                          fontWeight: isPaid ? FontWeight.bold : FontWeight.normal,
+                        )
+                    ),
+                  );
+                }).toList(),
+                onChanged: (v) {
+                  if (v != null) selectedMonth = v;
+                },
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -95,7 +107,8 @@ class _AccountScreenState extends State<AccountScreen> {
             onPressed: () {
               final amount = double.tryParse(amountCtrl.text);
               if (amount != null) {
-                p.collectFee(student.id, amount, month: selectedMonth);
+                p.collectFee(student.id, amount,
+                    month: selectedMonth.month, year: selectedMonth.year);
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("Fee collected successfully")),
@@ -118,36 +131,32 @@ class _AccountScreenState extends State<AccountScreen> {
       return const Text("No months assigned yet");
     }
 
-    payments.sort((a, b) {
-      final da = DateTime.parse(a['date']);
-      final db = DateTime.parse(b['date']);
-      return da.compareTo(db);
-    });
+    payments.sort((a, b) =>
+        DateTime.parse(a['date']).compareTo(DateTime.parse(b['date'])));
 
     return SizedBox(
       height: 80,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: payments.length,
-        itemBuilder: (_, index) {
+        itemBuilder: (context, index) {
           final record = payments[index];
           final date = DateTime.parse(record['date']);
-
+          final monthYear =
+              "${DateFormat.MMM().format(date)}${date.year.toString().substring(2)}";
           final isPaid = record['status'] == 'paid';
-          final monthName = DateFormat.MMM().format(date);
-          final yearSuffix = date.year.toString().substring(2);
           final amount = (record['amount'] ?? 0).toDouble();
 
           return Container(
             width: 80,
             margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
-              color: isPaid ? Colors.green : Colors.red, // ✅ FIXED
+              color: isPaid ? Colors.green.shade400 : Colors.red.shade400,
               borderRadius: BorderRadius.circular(8),
             ),
             alignment: Alignment.center,
             child: Text(
-              "$monthName$yearSuffix\n৳${amount.toInt()}",
+              "$monthYear\n৳${amount.toInt()}",
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
@@ -164,14 +173,12 @@ class _AccountScreenState extends State<AccountScreen> {
   Widget _studentCard(Student s, AppProvider p) {
     return Card(
       elevation: 4,
-      shape:
-      RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(s.name,
-              style:
-              const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Text("ID: ${s.id}"),
           Text("Class: ${s.studentClass}"),
@@ -216,7 +223,6 @@ class _AccountScreenState extends State<AccountScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-
               if (foundStudent != null) ...[
                 _studentCard(foundStudent!, p),
                 const SizedBox(height: 16),
@@ -228,8 +234,7 @@ class _AccountScreenState extends State<AccountScreen> {
                 ElevatedButton.icon(
                   icon: const Icon(Icons.payment),
                   label: const Text("Collect Fee"),
-                  onPressed: () =>
-                      _collectFeeDialog(p, foundStudent!),
+                  onPressed: () => _collectFeeDialog(p, foundStudent!),
                 ),
               ] else
                 const Padding(

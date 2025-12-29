@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 
 class StudentScreen extends StatelessWidget {
@@ -50,11 +51,17 @@ class StudentScreen extends StatelessWidget {
                         _showAddEditDialog(context, student: s);
                       } else if (v == 'delete') {
                         _deleteStudent(context, s.id);
+                      } else if (v == 'assign') {
+                        _assignMonth(context, s);
+                      } else if (v == 'collect') {
+                        _collectFeeDialog(context, s);
                       }
                     },
                     itemBuilder: (_) => const [
                       PopupMenuItem(value: 'edit', child: Text("Edit")),
                       PopupMenuItem(value: 'delete', child: Text("Delete")),
+                      PopupMenuItem(value: 'assign', child: Text("Assign Month")),
+                      PopupMenuItem(value: 'collect', child: Text("Collect Fee")),
                     ],
                   ),
                 ],
@@ -191,6 +198,149 @@ class StudentScreen extends StatelessWidget {
               Navigator.pop(context);
             },
             child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------- ASSIGN MONTH ----------
+  void _assignMonth(BuildContext context, dynamic student) {
+    int selectedMonth = DateTime.now().month;
+    int selectedYear = DateTime.now().year;
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Assign Month"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<int>(
+              value: selectedMonth,
+              decoration: const InputDecoration(labelText: "Select Month"),
+              items: List.generate(12, (i) {
+                final month = i + 1;
+                return DropdownMenuItem(
+                  value: month,
+                  child: Text(DateFormat.MMM().format(DateTime(0, month))),
+                );
+              }),
+              onChanged: (v) {
+                if (v != null) selectedMonth = v;
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              value: selectedYear,
+              decoration: const InputDecoration(labelText: "Select Year"),
+              items: List.generate(5, (i) => DateTime.now().year + i)
+                  .map((y) => DropdownMenuItem(value: y, child: Text("$y")))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) selectedYear = v;
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () {
+              final p = context.read<AppProvider>();
+              p.collectFee(student.id, 0,
+                  month: selectedMonth, year: selectedYear);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Month assigned successfully")),
+              );
+            },
+            child: const Text("Assign"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------- COLLECT FEE ----------
+  void _collectFeeDialog(BuildContext context, dynamic student) {
+    final p = context.read<AppProvider>();
+    final amountCtrl = TextEditingController(text: student.monthlyFee.toString());
+    int selectedMonth = DateTime.now().month;
+    int selectedYear = DateTime.now().year;
+
+    final payments = p.paymentHistory(student.id);
+
+    final assignedMonths = payments
+        .map((e) => DateTime.parse(e['date']))
+        .toList()
+      ..sort((a, b) => a.compareTo(b));
+
+    if (assignedMonths.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No months assigned. Assign a month first.")),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Collect Fee"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: amountCtrl,
+              enabled: false,
+              decoration: const InputDecoration(labelText: "Amount"),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<DateTime>(
+              value: assignedMonths.first,
+              decoration: const InputDecoration(labelText: "Select Month"),
+              items: assignedMonths.map((d) {
+                final paid = (payments
+                    .firstWhere((pmt) =>
+                DateTime.parse(pmt['date']).month == d.month &&
+                    DateTime.parse(pmt['date']).year == d.year)['amount'] ??
+                    0) >=
+                    student.monthlyFee;
+                final text = "${DateFormat.MMM().format(d)}${d.year.toString().substring(2)}";
+                return DropdownMenuItem(
+                  value: d,
+                  enabled: !paid,
+                  child: Text(
+                    text,
+                    style: TextStyle(color: paid ? Colors.green : Colors.red),
+                  ),
+                );
+              }).toList(),
+              onChanged: (v) {
+                if (v != null) {
+                  selectedMonth = v.month;
+                  selectedYear = v.year;
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () {
+              final amount = double.tryParse(amountCtrl.text) ?? student.monthlyFee;
+              p.collectFee(student.id, amount, month: selectedMonth, year: selectedYear);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Fee collected successfully")),
+              );
+            },
+            child: const Text("Collect"),
           ),
         ],
       ),
