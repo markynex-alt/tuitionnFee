@@ -22,7 +22,8 @@ dependencies:
   firebase_core: ^3.15.2       # latest 3.x stable
   firebase_auth: ^5.3.0        # compatible with firebase_core 3.x
   cloud_firestore: ^5.6.12     # compatible with firebase_core 3.x
-  google_sign_in: ^7.2.0
+  google_sign_in: 6.1.6
+  connectivity_plus: ^7.0.0
 
 
 dev_dependencies:

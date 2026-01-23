@@ -1,12 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:connectivity_plus/connectivity_plus.dart'; // For checking internet
+import '../providers/app_provider.dart';
+import '../models/batch.dart';
+import 'student_screen.dart';
 import 'package:intl/intl.dart';
 
-
-import '../providers/app_provider.dart';
-
-class BatchScreen extends StatelessWidget {
+class BatchScreen extends StatefulWidget {
   const BatchScreen({super.key});
+
+  @override
+  State<BatchScreen> createState() => _BatchScreenState();
+}
+
+class _BatchScreenState extends State<BatchScreen> {
+  bool isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncBatches();
+  }
+
+  Future<void> _syncBatches() async {
+    // Check internet connection
+    final connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult != ConnectivityResult.none) {
+      setState(() => isLoading = true);
+      await context.read<AppProvider>().loadBatchesFromFirebase();
+      setState(() => isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,7 +38,9 @@ class BatchScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text("Batches")),
-      body: p.batches.isEmpty
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : p.batches.isEmpty
           ? const Center(child: Text("No batches created"))
           : ListView.builder(
         padding: const EdgeInsets.all(12),
@@ -34,23 +60,6 @@ class BatchScreen extends StatelessWidget {
                 subtitle: Text(
                   "Students: ${p.studentsByBatch(batch.id).length}",
                 ),
-                trailing: PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'edit') {
-                      _editBatch(context, batch.id, batch.name);
-                    } else if (value == 'delete') {
-                      _deleteBatch(context, batch.id);
-                    } else if (value == 'assign') {
-                      _assignMonth(context, batch.id);
-                    }
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'edit', child: Text("Edit")),
-                    PopupMenuItem(value: 'delete', child: Text("Delete")),
-                    PopupMenuItem(value: 'assign', child: Text("Assign Month")), // new option
-                  ],
-                ),
-
               ),
             ),
           );
@@ -82,146 +91,13 @@ class BatchScreen extends StatelessWidget {
             child: const Text("Cancel"),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               p.addBatch(ctrl.text);
               Navigator.pop(context);
+              // Sync with Firebase after adding
+              await _syncBatches();
             },
             child: const Text("Save"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------- EDIT BATCH ----------
-  void _editBatch(BuildContext context, String id, String oldName) {
-    final ctrl = TextEditingController(text: oldName);
-    final p = context.read<AppProvider>();
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Edit Batch"),
-        content: TextField(controller: ctrl),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              p.updateBatch(id, ctrl.text);
-              Navigator.pop(context);
-            },
-            child: const Text("Update"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------- DELETE BATCH ----------
-  void _deleteBatch(BuildContext context, String id) {
-    final p = context.read<AppProvider>();
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Delete Batch"),
-        content: const Text("Are you sure? Students will be unassigned."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              p.deleteBatch(id);
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("Delete"),
-          ),
-        ],
-      ),
-    );
-  }
-  // ---------- ASSIGN MONTH ----------
-  void _assignMonth(BuildContext context, String batchId) {
-    int selectedMonth = DateTime.now().month;
-    int selectedYear = DateTime.now().year;
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Assign Month"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Month selector
-            DropdownButtonFormField<int>(
-              value: selectedMonth,
-              decoration: const InputDecoration(labelText: "Select Month"),
-              items: List.generate(12, (i) {
-                final month = i + 1;
-                final monthName =
-                DateFormat.MMM().format(DateTime(0, month));
-                return DropdownMenuItem(
-                  value: month,
-                  child: Text(monthName),
-                );
-              }),
-              onChanged: (v) {
-                if (v != null) selectedMonth = v;
-              },
-            ),
-            const SizedBox(height: 12),
-
-            // Year selector
-            DropdownButtonFormField<int>(
-              value: selectedYear,
-              decoration: const InputDecoration(labelText: "Select Year"),
-              items: List.generate(5, (i) {
-                final year = DateTime.now().year + i;
-                return DropdownMenuItem(
-                  value: year,
-                  child: Text(year.toString()),
-                );
-              }),
-              onChanged: (v) {
-                if (v != null) selectedYear = v;
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final p = context.read<AppProvider>();
-              final students = p.studentsByBatch(batchId);
-
-              for (final s in students) {
-                // ✅ ALWAYS assign (collectFee handles duplicates)
-                p.collectFee(
-                  s.id,
-                  0, // 0 = assigned
-                  month: selectedMonth,
-                  year: selectedYear,
-                );
-              }
-
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Month assigned successfully"),
-                ),
-              );
-            },
-            child: const Text("Assign"),
           ),
         ],
       ),
@@ -234,8 +110,7 @@ class BatchScreen extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       builder: (_) {
-        final students =
-        context.read<AppProvider>().studentsByBatch(batchId);
+        final students = context.read<AppProvider>().studentsByBatch(batchId);
 
         return Padding(
           padding: const EdgeInsets.all(16),
@@ -244,8 +119,8 @@ class BatchScreen extends StatelessWidget {
             children: [
               Text(
                 "Students in $name",
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold),
+                style:
+                const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               students.isEmpty
@@ -258,7 +133,8 @@ class BatchScreen extends StatelessWidget {
                   return Card(
                     child: ListTile(
                       title: Text(s.name),
-                      subtitle: Text("ID: ${s.id} | Fee: ৳${s.monthlyFee}"),
+                      subtitle:
+                      Text("ID: ${s.id} | Fee: ৳${s.monthlyFee}"),
                     ),
                   );
                 },
