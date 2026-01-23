@@ -17,6 +17,17 @@ class _AccountScreenState extends State<AccountScreen> {
   final TextEditingController searchCtrl = TextEditingController();
   Student? foundStudent;
 
+  // ---------- INIT ----------
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      final p = context.read<AppProvider>();
+      p.loadPaymentsFromFirebase();
+      p.syncPaymentsToFirebase();
+    });
+  }
+
   // ---------- SEARCH ----------
   void searchStudent(AppProvider p) {
     final q = searchCtrl.text.trim().toLowerCase();
@@ -32,24 +43,25 @@ class _AccountScreenState extends State<AccountScreen> {
 
   // ---------- COLLECT FEE ----------
   void _collectFeeDialog(AppProvider p, Student student) {
-    final amountCtrl =
-    TextEditingController(text: student.monthlyFee.toString());
-
     final payments = p.paymentHistory(student.id);
 
-    // ✅ Prepare assigned months as DateTime objects
+    // ✅ Convert all maps to proper Map<String, dynamic>
     final assignedMonths = payments
-        .map((e) => DateTime.parse(e['date']))
+        .map((e) => Map<String, dynamic>.from(e))
+        .where((pmt) => pmt['status'] != 'paid') // only unpaid
+        .map((pmt) => DateTime.parse(pmt['date']))
         .toList()
       ..sort((a, b) => a.compareTo(b));
 
     if (assignedMonths.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No months assigned yet")),
+        const SnackBar(content: Text("No unpaid months available")),
       );
       return;
     }
 
+    final amountCtrl =
+    TextEditingController(text: student.monthlyFee.toString());
     DateTime selectedMonth = assignedMonths.first;
 
     showDialog(
@@ -70,25 +82,11 @@ class _AccountScreenState extends State<AccountScreen> {
                 value: selectedMonth,
                 decoration: const InputDecoration(labelText: "Select Month"),
                 items: assignedMonths.map((d) {
-                  final record = payments.firstWhere(
-                        (pmt) =>
-                    DateTime.parse(pmt['date']).month == d.month &&
-                        DateTime.parse(pmt['date']).year == d.year,
-                  );
-                  final isPaid = record['status'] == 'paid';
                   final monthYear =
                       "${DateFormat.MMM().format(d)}${d.year.toString().substring(2)}";
-
                   return DropdownMenuItem<DateTime>(
                     value: d,
-                    enabled: !isPaid,
-                    child: Text(
-                      monthYear,
-                        style: TextStyle(
-                          color: isPaid ? Colors.green.shade700 : Colors.red.shade200,
-                          fontWeight: isPaid ? FontWeight.bold : FontWeight.normal,
-                        )
-                    ),
+                    child: Text(monthYear),
                   );
                 }).toList(),
                 onChanged: (v) {
@@ -125,7 +123,9 @@ class _AccountScreenState extends State<AccountScreen> {
 
   // ---------- PAYMENT CALENDAR ----------
   Widget _paymentCalendar(AppProvider p, Student student) {
-    final payments = p.paymentHistory(student.id);
+    final payments = p.paymentHistory(student.id)
+        .map((e) => Map<String, dynamic>.from(e)) // fix type
+        .toList();
 
     if (payments.isEmpty) {
       return const Text("No months assigned yet");
@@ -146,9 +146,10 @@ class _AccountScreenState extends State<AccountScreen> {
               "${DateFormat.MMM().format(date)}${date.year.toString().substring(2)}";
           final isPaid = record['status'] == 'paid';
           final amount = (record['amount'] ?? 0).toDouble();
+          final firebaseId = record['id'] ?? "N/A"; // ✅ Firebase payment ID
 
           return Container(
-            width: 80,
+            width: 100,
             margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
               color: isPaid ? Colors.green.shade400 : Colors.red.shade400,
@@ -156,11 +157,12 @@ class _AccountScreenState extends State<AccountScreen> {
             ),
             alignment: Alignment.center,
             child: Text(
-              "$monthYear\n৳${amount.toInt()}",
+              "$monthYear\n৳${amount.toInt()}\nID:$firebaseId", // show Firebase ID
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
+                fontSize: 12,
               ),
             ),
           );

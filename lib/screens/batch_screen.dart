@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:connectivity_plus/connectivity_plus.dart'; // For checking internet
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../providers/app_provider.dart';
 import '../models/batch.dart';
 import 'student_screen.dart';
@@ -23,7 +23,6 @@ class _BatchScreenState extends State<BatchScreen> {
   }
 
   Future<void> _syncBatches() async {
-    // Check internet connection
     final connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult != ConnectivityResult.none) {
       setState(() => isLoading = true);
@@ -47,33 +46,42 @@ class _BatchScreenState extends State<BatchScreen> {
         itemCount: p.batches.length,
         itemBuilder: (context, index) {
           final batch = p.batches[index];
-
           return Card(
             elevation: 4,
             margin: const EdgeInsets.only(bottom: 12),
-            child: InkWell(
-              onTap: () {
-                _openBatchStudents(context, batch.id, batch.name);
-              },
-              child: ListTile(
-                title: Text(batch.name),
-                subtitle: Text(
-                  "Students: ${p.studentsByBatch(batch.id).length}",
-                ),
+            child: ListTile(
+              title: Text(batch.name),
+              subtitle:
+              Text("Students: ${p.studentsByBatch(batch.id).length}"),
+              trailing: PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'assign_month') {
+                    _assignMonthDialog(batch);
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'assign_month',
+                    child: Text("Assign Month"),
+                  ),
+                ],
               ),
+              onTap: () {
+                _openBatchStudents(batch);
+              },
             ),
           );
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _addBatch(context),
+        onPressed: _addBatchDialog,
         child: const Icon(Icons.add),
       ),
     );
   }
 
   // ---------- ADD BATCH ----------
-  void _addBatch(BuildContext context) {
+  void _addBatchDialog() {
     final ctrl = TextEditingController();
     final p = context.read<AppProvider>();
 
@@ -92,9 +100,9 @@ class _BatchScreenState extends State<BatchScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              p.addBatch(ctrl.text);
+              if (ctrl.text.trim().isEmpty) return;
+              await p.addBatch(ctrl.text.trim());
               Navigator.pop(context);
-              // Sync with Firebase after adding
               await _syncBatches();
             },
             child: const Text("Save"),
@@ -104,45 +112,113 @@ class _BatchScreenState extends State<BatchScreen> {
     );
   }
 
-  // ---------- VIEW STUDENTS UNDER BATCH ----------
-  void _openBatchStudents(BuildContext context, String batchId, String name) {
+  // ---------- VIEW STUDENTS ----------
+  void _openBatchStudents(Batch batch) {
+    final students = context.read<AppProvider>().studentsByBatch(batch.id);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (_) {
-        final students = context.read<AppProvider>().studentsByBatch(batchId);
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "Students in ${batch.name}",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            students.isEmpty
+                ? const Text("No students in this batch")
+                : ListView.builder(
+              shrinkWrap: true,
+              itemCount: students.length,
+              itemBuilder: (_, i) {
+                final s = students[i];
+                return Card(
+                  child: ListTile(
+                    title: Text(s.name),
+                    subtitle: Text("ID: ${s.id} | Fee: ৳${s.monthlyFee}"),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+  // ---------- ASSIGN MONTH ----------
+  void _assignMonthDialog(Batch batch) {
+    final p = context.read<AppProvider>();
+    DateTime selectedDate = DateTime.now();
+    int tempMonth = selectedDate.month;
+    int tempYear = selectedDate.year;
+
+    final years = List.generate(14, (i) => 2022 + i);
+    final months = List.generate(12, (i) => i + 1);
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text("Assign Month to ${batch.name}"),
+          content: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              Text(
-                "Students in $name",
-                style:
-                const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              // Month Dropdown
+              DropdownButton<int>(
+                value: tempMonth,
+                items: months
+                    .map((m) => DropdownMenuItem(
+                  value: m,
+                  child: Text(DateFormat.MMMM().format(DateTime(0, m))),
+                ))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) setState(() => tempMonth = v);
+                },
               ),
-              const SizedBox(height: 12),
-              students.isEmpty
-                  ? const Text("No students in this batch")
-                  : ListView.builder(
-                shrinkWrap: true,
-                itemCount: students.length,
-                itemBuilder: (_, i) {
-                  final s = students[i];
-                  return Card(
-                    child: ListTile(
-                      title: Text(s.name),
-                      subtitle:
-                      Text("ID: ${s.id} | Fee: ৳${s.monthlyFee}"),
-                    ),
-                  );
+              // Year Dropdown
+              DropdownButton<int>(
+                value: tempYear,
+                items: years
+                    .map((y) => DropdownMenuItem(
+                  value: y,
+                  child: Text(y.toString()),
+                ))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) setState(() => tempYear = v);
                 },
               ),
             ],
           ),
-        );
-      },
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                selectedDate = DateTime(tempYear, tempMonth);
+                p.assignMonthToBatch(
+                  batch.id,
+                  month: tempMonth,
+                  year: tempYear,
+                );
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Month assigned successfully")),
+                );
+              },
+              child: const Text("Assign"),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

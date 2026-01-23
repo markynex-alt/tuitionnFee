@@ -9,144 +9,108 @@ import '../models/student.dart';
 
 class AppProvider extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Box get batchBox => Hive.box('batches');
   Box get studentBox => Hive.box('students');
   Box get paymentBox => Hive.box('payments');
   Box get settingsBox => Hive.box('settings');
 
-  // ---------- BATCH ----------
+  // ================= BATCH =================
+
   List<Batch> get batches => batchBox.values.map((e) {
     final m = Map<String, dynamic>.from(e);
-    return Batch(
-      id: m['id'] ?? '',
-      name: m['name'] ?? '',
-    );
+    return Batch(id: m['id'], name: m['name']);
   }).toList();
 
-  // ---------- ADD BATCH ----------
   Future<void> addBatch(String name) async {
     if (name.trim().isEmpty) return;
     final id = DateTime.now().millisecondsSinceEpoch.toString();
-    final batchData = {'id': id, 'name': name};
-
-    batchBox.put(id, batchData);
+    batchBox.put(id, {'id': id, 'name': name});
     notifyListeners();
-
     await _saveBatchesToFirebase();
   }
 
-  // ---------- UPDATE BATCH ----------
-  Future<void> updateBatch(String id, String newName) async {
-    if (newName.trim().isEmpty) return;
-    batchBox.put(id, {'id': id, 'name': newName});
+  Future<void> updateBatch(String id, String name) async {
+    batchBox.put(id, {'id': id, 'name': name});
     notifyListeners();
-
     await _saveBatchesToFirebase();
   }
 
-  // ---------- DELETE BATCH ----------
   Future<void> deleteBatch(String id) async {
     batchBox.delete(id);
-
-    // Optional: remove batchId from students
-    for (var key in studentBox.keys) {
-      final s = studentBox.get(key);
+    for (var k in studentBox.keys) {
+      final s = studentBox.get(k);
       if (s != null && s['batchId'] == id) {
-        studentBox.put(key, {...s, 'batchId': ''});
+        studentBox.put(k, {...s, 'batchId': ''});
       }
     }
     notifyListeners();
-
     await _saveBatchesToFirebase();
   }
 
-  // ---------- SAVE BATCHES TO FIREBASE ----------
   Future<void> _saveBatchesToFirebase() async {
     final user = _auth.currentUser;
     if (user == null || user.email == null) return;
 
-    final batchList = batches.map((b) => {'id': b.id, 'name': b.name}).toList();
-
-    try {
-      await FirebaseFirestore.instance
-          .collection('batches')
-          .doc(user.email)
-          .set({'batches': batchList});
-    } catch (e) {
-      debugPrint("Error saving batches to Firebase: $e");
-    }
+    await _firestore.collection('batches').doc(user.email).set({
+      'batches': batches.map((b) => {'id': b.id, 'name': b.name}).toList(),
+    });
   }
 
-  // ---------- LOAD BATCHES FROM FIREBASE ----------
   Future<void> loadBatchesFromFirebase() async {
     final user = _auth.currentUser;
     if (user == null || user.email == null) return;
 
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('batches')
-          .doc(user.email)
-          .get();
+    final doc = await _firestore.collection('batches').doc(user.email).get();
+    if (!doc.exists) return;
 
-      if (!doc.exists || doc.data() == null) return;
-
-      final batchList = List<Map<String, dynamic>>.from(doc.data()!['batches'] ?? []);
-
-      await batchBox.clear();
-      for (var b in batchList) {
-        batchBox.put(b['id'], b);
-      }
-      notifyListeners();
-    } catch (e) {
-      debugPrint("Error loading batches from Firebase: $e");
+    await batchBox.clear();
+    for (final b in List.from(doc['batches'])) {
+      batchBox.put(b['id'], b);
     }
-  }
-
-  // ---------- STUDENTS BY BATCH ----------
-  List<Student> studentsByBatch(String batchId) {
-    return students.where((s) => s.batchId == batchId).toList();
-  }
-
-  // ---------- STUDENT ----------
-  List<Student> get students => studentBox.values.map((e) {
-    final m = Map<String, dynamic>.from(e);
-    return Student(
-      id: m['id'] ?? '',
-      name: m['name'] ?? '',
-      studentClass: m['class'] ?? '',
-      phone: m['phone'] ?? '',
-      monthlyFee: (m['fee'] ?? 0).toDouble(),
-      batchId: m['batchId'] ?? '',
-    );
-  }).toList();
-
-  // ------------------- OTHER STUDENT & PAYMENT METHODS -------------------
-  String get studentIdPrefix =>
-      settingsBox.get('prefix', defaultValue: 'ST') as String;
-
-  int get studentIdLength =>
-      settingsBox.get('length', defaultValue: 5) as int;
-
-  void setStudentIdConfig({required String prefix, required int length}) {
-    settingsBox.put('prefix', prefix);
-    settingsBox.put('length', length);
     notifyListeners();
   }
 
+  String batchNameById(String id) =>
+      batchBox.get(id)?['name'] ?? 'No Batch';
+
+  // ================= STUDENT =================
+
+  List<Student> get students => studentBox.values.map((e) {
+    final m = Map<String, dynamic>.from(e);
+    return Student(
+      id: m['id'],
+      name: m['name'],
+      studentClass: m['class'],
+      phone: m['phone'],
+      monthlyFee: (m['fee'] ?? 0).toDouble(),
+      batchId: m['batchId'],
+    );
+  }).toList();
+
+  List<Student> studentsByBatch(String batchId) =>
+      students.where((s) => s.batchId == batchId).toList();
+
+  String get studentIdPrefix =>
+      settingsBox.get('prefix', defaultValue: 'ST');
+
+  int get studentIdLength =>
+      settingsBox.get('length', defaultValue: 5);
+
   String generateStudentId() {
-    final max = pow(10, studentIdLength) as int;
-    final number = Random().nextInt(max).toString().padLeft(studentIdLength, '0');
-    return '$studentIdPrefix$number';
+    final max = pow(10, studentIdLength).toInt();
+    final n = Random().nextInt(max).toString().padLeft(studentIdLength, '0');
+    return '$studentIdPrefix$n';
   }
 
-  void addStudent({
+  Future<void> addStudent({
     required String name,
     required String studentClass,
     required String phone,
     required double fee,
     required String batchId,
-  }) {
+  }) async {
     final id = generateStudentId();
     studentBox.put(id, {
       'id': id,
@@ -157,16 +121,17 @@ class AppProvider extends ChangeNotifier {
       'batchId': batchId,
     });
     notifyListeners();
+    await _saveStudentsToFirebase();
   }
 
-  void updateStudent({
+  Future<void> updateStudent({
     required String id,
     required String name,
     required String studentClass,
     required String phone,
     required double fee,
     required String batchId,
-  }) {
+  }) async {
     studentBox.put(id, {
       'id': id,
       'name': name,
@@ -176,60 +141,161 @@ class AppProvider extends ChangeNotifier {
       'batchId': batchId,
     });
     notifyListeners();
+    await _saveStudentsToFirebase();
   }
 
-  void deleteStudent(String id) {
+  Future<void> deleteStudent(String id) async {
     studentBox.delete(id);
+    notifyListeners();
+    await _saveStudentsToFirebase();
+  }
+
+  Future<void> _saveStudentsToFirebase() async {
+    final user = _auth.currentUser;
+    if (user == null || user.email == null) return;
+
+    await _firestore.collection('students').doc(user.email).set({
+      'students': students
+          .map((s) => {
+        'id': s.id,
+        'name': s.name,
+        'class': s.studentClass,
+        'phone': s.phone,
+        'fee': s.monthlyFee,
+        'batchId': s.batchId,
+      })
+          .toList(),
+    });
+  }
+
+  Future<void> loadStudentsFromFirebase() async {
+    final user = _auth.currentUser;
+    if (user == null || user.email == null) return;
+
+    final doc = await _firestore.collection('students').doc(user.email).get();
+    if (!doc.exists) return;
+
+    await studentBox.clear();
+    for (final s in List.from(doc['students'])) {
+      studentBox.put(s['id'], s);
+    }
     notifyListeners();
   }
 
-  String batchNameById(String id) {
-    final b = batchBox.get(id);
-    if (b == null) return 'No Batch';
-    return b['name']?.toString() ?? 'No Batch';
+  void assignMonth({
+    required String studentId,
+    required int month,
+    required int year,
+    required double amount,
+  }) {
+    final exists = paymentBox.values.any((p) {
+      if (p['studentId'] != studentId) return false;
+      final d = DateTime.parse(p['date']);
+      return d.month == month && d.year == year;
+    });
+    if (exists) return;
+
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    paymentBox.put(id, {
+      'id': id,
+      'studentId': studentId,
+      'amount': amount,
+      'status': 'assigned',
+      'date': DateTime(year, month, 1).toIso8601String(),
+      'synced': false,
+    });
+
+    notifyListeners();
+    syncPaymentsToFirebase();
   }
 
-  void collectFee(String studentId, double amount, {int? month, int? year}) {
-    final now = DateTime.now();
-    final m = month ?? now.month;
-    final y = year ?? now.year;
+  void assignMonthToBatch(
+      String batchId, {
+        required int month,
+        required int year,
+      }) {
+    for (final s in studentsByBatch(batchId)) {
+      assignMonth(
+        studentId: s.id,
+        month: month,
+        year: year,
+        amount: s.monthlyFee,
+      );
+    }
+    notifyListeners();
+  }
 
-    final existingKey = paymentBox.keys.firstWhere(
+  void collectFee(
+      String studentId,
+      double amount, {
+        required int month,
+        required int year,
+      }) {
+    final key = paymentBox.keys.cast<String?>().firstWhere(
           (k) {
-        final p = paymentBox.get(k);
-        if (p == null || p['studentId'] != studentId) return false;
+        final p = Map<String, dynamic>.from(paymentBox.get(k));
         final d = DateTime.parse(p['date']);
-        return d.month == m && d.year == y;
+        return p['studentId'] == studentId &&
+            d.month == month &&
+            d.year == year;
       },
       orElse: () => null,
     );
 
-    if (existingKey != null) {
-      final p = Map<String, dynamic>.from(paymentBox.get(existingKey));
+    if (key != null) {
+      final p = Map<String, dynamic>.from(paymentBox.get(key));
       p['amount'] = amount;
-      p['status'] = amount > 0 ? 'paid' : 'assigned';
-      paymentBox.put(existingKey, p);
-    } else {
-      final id = DateTime.now().millisecondsSinceEpoch.toString();
-      paymentBox.put(id, {
-        'id': id,
-        'studentId': studentId,
-        'amount': amount,
-        'status': amount > 0 ? 'paid' : 'assigned',
-        'date': DateTime(y, m, 1).toIso8601String(),
-      });
+      p['status'] = 'paid';
+      p['synced'] = false;
+      paymentBox.put(key, p);
+      notifyListeners();
+      syncPaymentsToFirebase(); // ✅ Save to Firebase immediately
     }
-
-    notifyListeners();
   }
 
-  List<Map<String, dynamic>> paymentHistory(String studentId) {
-    return paymentBox.values
-        .where((e) => e['studentId'] == studentId)
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
-  }
+  List<Map<String, dynamic>> paymentHistory(String studentId) =>
+      paymentBox.values
+          .map((e) => Map<String, dynamic>.from(e))
+          .where((e) => e['studentId'] == studentId)
+          .toList();
 
   double get totalIncome =>
-      paymentBox.values.fold(0.0, (sum, e) => sum + (e['amount'] ?? 0));
+      paymentBox.values.fold(0.0, (s, e) => s + (e['amount'] ?? 0));
+
+  // ================= PAYMENT FIREBASE SYNC =================
+
+  Future<void> syncPaymentsToFirebase() async {
+    final user = _auth.currentUser;
+    if (user == null || user.email == null) return;
+
+    for (final key in paymentBox.keys) {
+      final p = Map<String, dynamic>.from(paymentBox.get(key));
+      if (p['synced'] == true) continue;
+
+      await _firestore
+          .collection('payments')
+          .doc(user.email)
+          .collection('items')
+          .doc(key)
+          .set(p);
+
+      paymentBox.put(key, {...p, 'synced': true});
+    }
+  }
+
+  Future<void> loadPaymentsFromFirebase() async {
+    final user = _auth.currentUser;
+    if (user == null || user.email == null) return;
+
+    final snap = await _firestore
+        .collection('payments')
+        .doc(user.email)
+        .collection('items')
+        .get();
+
+    for (final d in snap.docs) {
+      paymentBox.put(d.id, {...d.data(), 'synced': true});
+    }
+    notifyListeners();
+  }
 }
