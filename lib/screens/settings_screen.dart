@@ -66,71 +66,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: const Text("Settings"),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Card(
-          elevation: 4,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.grey.shade300,
-                  child: user?.photoURL != null
-                      ? ClipOval(
-                    child: Image.network(
-                      user!.photoURL!,
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.cover,
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundColor: Colors.grey.shade300,
+                      child: user?.photoURL != null
+                          ? ClipOval(
+                        child: Image.network(
+                          user!.photoURL!,
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                          : const Icon(
+                        Icons.account_circle, // demo icon
+                        size: 50,
+                        color: Colors.white,
+                      ),
                     ),
-                  )
-                      : const Icon(
-                    Icons.account_circle, // demo icon
-                    size: 50,
-                    color: Colors.white,
-                  ),
-                ),
 
-                const SizedBox(height: 16),
-                Text(
-                  user == null ? "Not logged in" : user.email ?? "User",
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                    const SizedBox(height: 16),
+                    Text(
+                      user == null ? "Not logged in" : user.email ?? "User",
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                    user == null
+                        ? ElevatedButton.icon(
+                      icon: const Icon(Icons.login),
+                      label: const Text("Login with Google"),
+                      onPressed: _loginWithGoogle,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                      ),
+                    )
+                        : OutlinedButton.icon(
+                      icon: const Icon(Icons.logout),
+                      label: const Text("Logout"),
+                      onPressed: _logout,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                      ),
+                    ),
+                    if (isLoading) ...[
+                      const SizedBox(height: 20),
+                      const CircularProgressIndicator(),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 30),
-                user == null
-                    ? ElevatedButton.icon(
-                  icon: const Icon(Icons.login),
-                  label: const Text("Login with Google"),
-                  onPressed: _loginWithGoogle,
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 50),
-                  ),
-                )
-                    : OutlinedButton.icon(
-                  icon: const Icon(Icons.logout),
-                  label: const Text("Logout"),
-                  onPressed: _logout,
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 50),
-                  ),
-                ),
-                if (isLoading) ...[
-                  const SizedBox(height: 20),
-                  const CircularProgressIndicator(),
-                ],
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
