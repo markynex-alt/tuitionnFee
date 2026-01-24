@@ -92,16 +92,35 @@ class AppProvider extends ChangeNotifier {
   List<Student> studentsByBatch(String batchId) =>
       students.where((s) => s.batchId == batchId).toList();
 
-  String get studentIdPrefix =>
-      settingsBox.get('prefix', defaultValue: 'ST');
-
-  int get studentIdLength =>
-      settingsBox.get('length', defaultValue: 5);
-
   String generateStudentId() {
-    final max = pow(10, studentIdLength).toInt();
-    final n = Random().nextInt(max).toString().padLeft(studentIdLength, '0');
-    return '$studentIdPrefix$n';
+    final year = DateTime.now().year % 100; // last 2 digits (e.g. 26)
+    final yearPrefix = year.toString().padLeft(2, '0');
+
+    // Get all student IDs of current year
+    final currentYearIds = students
+        .map((s) => s.id)
+        .where((id) => id.startsWith(yearPrefix))
+        .toList();
+
+    int nextNumber = 1;
+
+    if (currentYearIds.isNotEmpty) {
+      // Extract last 3 digits and find max
+      final numbers = currentYearIds.map((id) {
+        return int.tryParse(id.substring(2)) ?? 0;
+      }).toList();
+
+      nextNumber = numbers.reduce((a, b) => a > b ? a : b) + 1;
+    }
+
+    // Safety: limit 001–999
+    if (nextNumber > 999) {
+      throw Exception("Student ID limit reached for year $yearPrefix");
+    }
+
+    final suffix = nextNumber.toString().padLeft(3, '0');
+
+    return '$yearPrefix$suffix'; // e.g. 26001
   }
 
   Future<void> addStudent({
@@ -111,7 +130,7 @@ class AppProvider extends ChangeNotifier {
     required double fee,
     required String batchId,
   }) async {
-    final id = generateStudentId();
+    final id = generateStudentId(); // ✅ now uses new logic
     studentBox.put(id, {
       'id': id,
       'name': name,
@@ -123,6 +142,7 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
     await _saveStudentsToFirebase();
   }
+
 
   Future<void> updateStudent({
     required String id,

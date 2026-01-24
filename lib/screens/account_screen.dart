@@ -17,6 +17,9 @@ class _AccountScreenState extends State<AccountScreen> {
   final TextEditingController searchCtrl = TextEditingController();
   Student? foundStudent;
 
+  // NEW: state variable for See More
+  bool _showAllPayments = false;
+
   // ---------- INIT ----------
   @override
   void initState() {
@@ -38,7 +41,9 @@ class _AccountScreenState extends State<AccountScreen> {
           s.phone.contains(q),
     );
     FocusScope.of(context).unfocus();
-    setState(() {});
+    setState(() {
+      _showAllPayments = false; // reset See More when searching
+    });
   }
 
   // ---------- COLLECT FEE ----------
@@ -60,8 +65,7 @@ class _AccountScreenState extends State<AccountScreen> {
       return;
     }
 
-    final amountCtrl =
-    TextEditingController(text: student.monthlyFee.toString());
+    final amountCtrl = TextEditingController(text: student.monthlyFee.toString());
     DateTime selectedMonth = assignedMonths.first;
 
     showDialog(
@@ -121,53 +125,117 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  // ---------- PAYMENT CALENDAR ----------
+  // ---------- PAYMENT CALENDAR with See More ----------
   Widget _paymentCalendar(AppProvider p, Student student) {
     final payments = p.paymentHistory(student.id)
-        .map((e) => Map<String, dynamic>.from(e)) // fix type
+        .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
     if (payments.isEmpty) {
       return const Text("No months assigned yet");
     }
 
-    payments.sort((a, b) =>
-        DateTime.parse(a['date']).compareTo(DateTime.parse(b['date'])));
+    // Sort: unpaid first, then paid, then by date
+    payments.sort((a, b) {
+      final statusA = a['status'] == 'paid' ? 1 : 0;
+      final statusB = b['status'] == 'paid' ? 1 : 0;
+      if (statusA != statusB) return statusA - statusB;
+      return DateTime.parse(a['date']).compareTo(DateTime.parse(b['date']));
+    });
 
-    return SizedBox(
-      height: 80,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: payments.length,
-        itemBuilder: (context, index) {
-          final record = payments[index];
-          final date = DateTime.parse(record['date']);
-          final monthYear =
-              "${DateFormat.MMM().format(date)}${date.year.toString().substring(2)}";
-          final isPaid = record['status'] == 'paid';
-          final amount = (record['amount'] ?? 0).toDouble();
-          final firebaseId = record['id'] ?? "N/A"; // ✅ Firebase payment ID
+    // Determine which rows to show
+    final rowsToShow =
+    _showAllPayments ? payments : payments.take(5).toList();
 
-          return Container(
-            width: 100,
-            margin: const EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              color: isPaid ? Colors.green.shade400 : Colors.red.shade400,
-              borderRadius: BorderRadius.circular(8),
+    return Column(
+      children: [
+        Table(
+          border: TableBorder.all(color: Colors.grey.shade300),
+          columnWidths: const {
+            0: FlexColumnWidth(2), // Month
+            1: FlexColumnWidth(2), // Amount
+            2: FlexColumnWidth(2), // Status
+            3: FlexColumnWidth(3), // Payment ID
+          },
+          children: [
+            // Table header
+            const TableRow(
+              decoration: BoxDecoration(color: Colors.grey),
+              children: [
+                Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Text("Month",
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.white)),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Text("Amount",
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.white)),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Text("Status",
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.white)),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Text("Payment ID",
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.white)),
+                ),
+              ],
             ),
-            alignment: Alignment.center,
-            child: Text(
-              "$monthYear\n৳${amount.toInt()}\nID:$firebaseId", // show Firebase ID
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                fontSize: 12,
-              ),
-            ),
-          );
-        },
-      ),
+            // Table rows
+            ...rowsToShow.map((record) {
+              final date = DateTime.parse(record['date']);
+              final monthYear =
+                  "${DateFormat.MMM().format(date)}${date.year.toString().substring(2)}";
+              final isPaid = record['status'] == 'paid';
+              final amount = (record['amount'] ?? 0).toDouble();
+              final firebaseId = record['id'] ?? "N/A";
+
+              return TableRow(
+                decoration: BoxDecoration(
+                  color: isPaid ? Colors.green.shade50 : Colors.red.shade50,
+                ),
+                children: [
+                  Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(monthYear)),
+                  Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text("৳${amount.toInt()}")),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      isPaid ? "Paid" : "Pending",
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isPaid ? Colors.green : Colors.red),
+                    ),
+                  ),
+                  Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(firebaseId)),
+                ],
+              );
+            }).toList(),
+          ],
+        ),
+        // See More / Show Less button
+        if (payments.length > 5)
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _showAllPayments = !_showAllPayments;
+              });
+            },
+            child: Text(_showAllPayments ? "Show Less" : "See More"),
+          ),
+      ],
     );
   }
 
@@ -228,7 +296,7 @@ class _AccountScreenState extends State<AccountScreen> {
               if (foundStudent != null) ...[
                 _studentCard(foundStudent!, p),
                 const SizedBox(height: 16),
-                const Text("Payment Calendar",
+                const Text("Payment Records",
                     style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 _paymentCalendar(p, foundStudent!),

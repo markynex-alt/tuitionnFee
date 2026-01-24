@@ -57,40 +57,13 @@ class _StudentScreenState extends State<StudentScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+            margin:
+            const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
             child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      s.name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 16),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  PopupMenuButton<String>(
-                    onSelected: (v) {
-                      if (v == 'edit') {
-                        _showAddEditDialog(context, student: s);
-                      } else if (v == 'delete') {
-                        _deleteStudent(context, s.id);
-                      } else if (v == 'assign') {
-                        _assignMonth(context, s);
-                      } else if (v == 'collect') {
-                        _collectFeeDialog(context, s);
-                      }
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'edit', child: Text("Edit")),
-                      PopupMenuItem(value: 'delete', child: Text("Delete")),
-                      PopupMenuItem(value: 'assign', child: Text("Assign Month")),
-                      PopupMenuItem(value: 'collect', child: Text("Collect Fee")),
-                    ],
-                  ),
-                ],
+              title: Text(
+                s.name,
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 16),
               ),
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,8 +73,30 @@ class _StudentScreenState extends State<StudentScreen> {
                   Text(
                     "Fee: ৳${s.monthlyFee}",
                     style: const TextStyle(
-                        fontWeight: FontWeight.bold, color: Colors.green),
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green),
                   ),
+                ],
+              ),
+              trailing: PopupMenuButton<String>(
+                onSelected: (v) {
+                  if (v == 'edit') {
+                    _showAddEditDialog(context, student: s);
+                  } else if (v == 'delete') {
+                    _deleteStudent(context, s.id);
+                  } else if (v == 'assign') {
+                    _assignMonth(context, s);
+                  } else if (v == 'collect') {
+                    _collectFeeDialog(context, s);
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text("Edit")),
+                  PopupMenuItem(value: 'delete', child: Text("Delete")),
+                  PopupMenuItem(
+                      value: 'assign', child: Text("Assign Month")),
+                  PopupMenuItem(
+                      value: 'collect', child: Text("Collect Fee")),
                 ],
               ),
             ),
@@ -229,12 +224,141 @@ class _StudentScreenState extends State<StudentScreen> {
     );
   }
 
-  // ---------- ASSIGN / COLLECT FEE ----------
+  // ---------- ASSIGN MONTH ----------
   void _assignMonth(BuildContext context, dynamic student) {
-    // Use same logic as your batch screen
+    final p = context.read<AppProvider>();
+    DateTime now = DateTime.now();
+    int tempMonth = now.month;
+    int tempYear = now.year;
+
+    final years = List.generate(14, (i) => 2022 + i);
+    final months = List.generate(12, (i) => i + 1);
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text("Assign Month to ${student.name}"),
+          content: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              DropdownButton<int>(
+                value: tempMonth,
+                items: months
+                    .map((m) => DropdownMenuItem(
+                  value: m,
+                  child:
+                  Text(DateFormat.MMMM().format(DateTime(0, m))),
+                ))
+                    .toList(),
+                onChanged: (v) => setState(() => tempMonth = v!),
+              ),
+              DropdownButton<int>(
+                value: tempYear,
+                items: years
+                    .map((y) => DropdownMenuItem(
+                  value: y,
+                  child: Text(y.toString()),
+                ))
+                    .toList(),
+                onChanged: (v) => setState(() => tempYear = v!),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel")),
+            ElevatedButton(
+              onPressed: () {
+                p.assignMonth(
+                  studentId: student.id,
+                  month: tempMonth,
+                  year: tempYear,
+                  amount: student.monthlyFee,
+                );
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Month assigned successfully")),
+                );
+              },
+              child: const Text("Assign"),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
+  // ---------- COLLECT FEE (SAME AS AccountScreen) ----------
   void _collectFeeDialog(BuildContext context, dynamic student) {
-    // Use same logic as your batch screen
+    final p = context.read<AppProvider>();
+    final payments = p.paymentHistory(student.id)
+        .map((e) => Map<String, dynamic>.from(e))
+        .where((pmt) => pmt['status'] != 'paid')
+        .map((pmt) => DateTime.parse(pmt['date']))
+        .toList()
+      ..sort((a, b) => a.compareTo(b));
+
+    if (payments.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No unpaid months available")),
+      );
+      return;
+    }
+
+    final amountCtrl =
+    TextEditingController(text: student.monthlyFee.toString());
+    DateTime selectedMonth = payments.first;
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text("Collect Fee for ${student.name}"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: amountCtrl,
+              enabled: false,
+              decoration: const InputDecoration(labelText: "Amount"),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<DateTime>(
+              value: selectedMonth,
+              decoration: const InputDecoration(labelText: "Select Month"),
+              items: payments.map((d) {
+                final label =
+                    "${DateFormat.MMM().format(d)}${d.year.toString().substring(2)}";
+                return DropdownMenuItem(value: d, child: Text(label));
+              }).toList(),
+              onChanged: (v) {
+                if (v != null) selectedMonth = v;
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () {
+              p.collectFee(
+                student.id,
+                student.monthlyFee,
+                month: selectedMonth.month,
+                year: selectedMonth.year,
+              );
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Fee collected successfully")),
+              );
+            },
+            child: const Text("Collect"),
+          ),
+        ],
+      ),
+    );
   }
 }
