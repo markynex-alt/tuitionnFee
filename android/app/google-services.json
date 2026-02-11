@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1222743060:android:5a64b99d694efc0bb70301",
+        "mobilesdk_app_id": "1:1222743060:android:0eb09240965d6024b70301",
         "android_client_info": {
-          "package_name": "com.example.tuitionfee.app"
+          "package_name": "com.tuitionfee.app"
         }
       },
       "oauth_client": [
@@ -29,6 +29,13 @@
             {
               "client_id": "1222743060-292lpfs5ktq5tgfhupfveu62lt7rv5kh.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "1222743060-dtd20beqf6adbbjm89fa42vbji7a80tg.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.tuitionfee"
+              }
             }
           ]
         }

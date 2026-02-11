@@ -111,7 +111,8 @@ class _StudentScreenState extends State<StudentScreen> {
     final p = context.read<AppProvider>();
 
     final nameCtrl = TextEditingController(text: student?.name ?? '');
-    final classCtrl = TextEditingController(text: student?.studentClass ?? '');
+    final classCtrl =
+    TextEditingController(text: student?.studentClass ?? '');
     final phoneCtrl = TextEditingController(text: student?.phone ?? '');
     final feeCtrl =
     TextEditingController(text: student?.monthlyFee.toString() ?? '');
@@ -171,6 +172,8 @@ class _StudentScreenState extends State<StudentScreen> {
               final fee = double.tryParse(feeCtrl.text);
               if (fee == null) return;
 
+              Navigator.pop(context); // ✅ CLOSE FIRST (offline safe)
+
               if (student == null) {
                 await p.addStudent(
                   name: nameCtrl.text.trim(),
@@ -189,8 +192,6 @@ class _StudentScreenState extends State<StudentScreen> {
                   batchId: batchId!,
                 );
               }
-
-              Navigator.pop(context);
             },
             child: Text(student == null ? "Add" : "Update"),
           ),
@@ -200,7 +201,7 @@ class _StudentScreenState extends State<StudentScreen> {
   }
 
   // ---------- DELETE ----------
-  void _deleteStudent(BuildContext context, String id) async {
+  void _deleteStudent(BuildContext context, String id) {
     final p = context.read<AppProvider>();
     showDialog(
       context: context,
@@ -214,8 +215,8 @@ class _StudentScreenState extends State<StudentScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
+              Navigator.pop(context); // ✅ CLOSE FIRST
               await p.deleteStudent(id);
-              Navigator.pop(context);
             },
             child: const Text("Delete"),
           ),
@@ -271,15 +272,12 @@ class _StudentScreenState extends State<StudentScreen> {
                 child: const Text("Cancel")),
             ElevatedButton(
               onPressed: () {
+                Navigator.pop(context); // ✅ CLOSE FIRST
                 p.assignMonth(
                   studentId: student.id,
                   month: tempMonth,
                   year: tempYear,
                   amount: student.monthlyFee,
-                );
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Month assigned successfully")),
                 );
               },
               child: const Text("Assign"),
@@ -290,10 +288,11 @@ class _StudentScreenState extends State<StudentScreen> {
     );
   }
 
-  // ---------- COLLECT FEE (SAME AS AccountScreen) ----------
+  // ---------- COLLECT FEE ----------
   void _collectFeeDialog(BuildContext context, dynamic student) {
     final p = context.read<AppProvider>();
-    final payments = p.paymentHistory(student.id)
+    final payments = p
+        .paymentHistory(student.id)
         .map((e) => Map<String, dynamic>.from(e))
         .where((pmt) => pmt['status'] != 'paid')
         .map((pmt) => DateTime.parse(pmt['date']))
@@ -307,36 +306,23 @@ class _StudentScreenState extends State<StudentScreen> {
       return;
     }
 
-    final amountCtrl =
-    TextEditingController(text: student.monthlyFee.toString());
     DateTime selectedMonth = payments.first;
 
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: Text("Collect Fee for ${student.name}"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountCtrl,
-              enabled: false,
-              decoration: const InputDecoration(labelText: "Amount"),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<DateTime>(
-              value: selectedMonth,
-              decoration: const InputDecoration(labelText: "Select Month"),
-              items: payments.map((d) {
-                final label =
-                    "${DateFormat.MMM().format(d)}${d.year.toString().substring(2)}";
-                return DropdownMenuItem(value: d, child: Text(label));
-              }).toList(),
-              onChanged: (v) {
-                if (v != null) selectedMonth = v;
-              },
-            ),
-          ],
+        content: DropdownButtonFormField<DateTime>(
+          value: selectedMonth,
+          decoration: const InputDecoration(labelText: "Select Month"),
+          items: payments.map((d) {
+            final label =
+                "${DateFormat.MMM().format(d)}${d.year.toString().substring(2)}";
+            return DropdownMenuItem(value: d, child: Text(label));
+          }).toList(),
+          onChanged: (v) {
+            if (v != null) selectedMonth = v;
+          },
         ),
         actions: [
           TextButton(
@@ -344,15 +330,12 @@ class _StudentScreenState extends State<StudentScreen> {
               child: const Text("Cancel")),
           ElevatedButton(
             onPressed: () {
+              Navigator.pop(context); // ✅ CLOSE FIRST
               p.collectFee(
                 student.id,
                 student.monthlyFee,
                 month: selectedMonth.month,
                 year: selectedMonth.year,
-              );
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Fee collected successfully")),
               );
             },
             child: const Text("Collect"),

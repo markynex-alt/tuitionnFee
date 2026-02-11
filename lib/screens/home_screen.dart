@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../providers/app_provider.dart';
+import 'package:intl/intl.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -32,6 +33,7 @@ class HomeScreen extends StatelessWidget {
     final totalDue = sum(assigned);
     final monthIncome = currentMonthSum(paid);
     final monthDue = currentMonthSum(assigned);
+    final formatter = NumberFormat("#,##,##0", "en_IN");
 
     return Scaffold(
       appBar: AppBar(
@@ -65,31 +67,32 @@ class HomeScreen extends StatelessWidget {
                 ),
                 _statTile(
                   title: 'Total Income',
-                  value: '৳${totalIncome.toStringAsFixed(0)}',
+                  value: '৳${formatter.format(totalIncome)}',
                   icon: Icons.monetization_on,
                   color: Colors.green,
                 ),
+
                 _statTile(
                   title: 'Total Due',
-                  value: '৳${totalDue.toStringAsFixed(0)}',
+                  value: '৳${formatter.format(totalDue)}',
                   icon: Icons.warning_amber,
                   color: Colors.red,
                 ),
                 _statTile(
                   title: 'This Month Income',
-                  value: '৳${monthIncome.toStringAsFixed(0)}',
+                  value: '৳${formatter.format(monthIncome)}',
                   icon: Icons.trending_up,
                   color: Colors.teal,
                 ),
                 _statTile(
                   title: 'This Month Due',
-                  value: '৳${monthDue.toStringAsFixed(0)}',
+                  value: '৳${formatter.format(monthDue)}',
                   icon: Icons.schedule,
                   color: Colors.deepOrange,
                 ),
                 _statTile(
                   title: 'Overall Paid',
-                  value: '৳${totalIncome.toStringAsFixed(0)}',
+                  value: '৳${formatter.format(totalIncome)}',
                   icon: Icons.check_circle,
                   color: Colors.indigo,
                 ),
